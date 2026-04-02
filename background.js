@@ -1,19 +1,23 @@
-let authorization = "EMPTY";
+function getAuthorizationCookie(sendResponse) {
+  chrome.cookies.get(
+    { url: "https://vercel.com", name: "authorization" },
+    (cookie) => {
+      if (chrome.runtime.lastError || !cookie?.value) {
+        sendResponse("");
+        return;
+      }
 
-// get authorization cookie
-chrome.cookies.get(
-  { url: "https://vercel.com", name: "authorization" },
-  (cookie) => {
-    if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError);
-      return;
+      sendResponse(cookie.value);
     }
-
-    console.log("Authorization Cookie:", cookie);
-    authorization = cookie.value;
-  }
-);
+  );
+}
 
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-  sendResponse(authorization);
+  if (msg?.text !== "getAuthorization") {
+    sendResponse("");
+    return;
+  }
+
+  getAuthorizationCookie(sendResponse);
+  return true;
 });

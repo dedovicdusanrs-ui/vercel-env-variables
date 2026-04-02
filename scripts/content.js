@@ -109,7 +109,15 @@ function initializeUI() {
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
   chrome.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    console.log("Response: ", response);
+    if (!response) {
+      loadingUI.remove();
+
+      const resultUI = createUI(false, {
+        error: "Authorization cookie not found. Please make sure you are signed in to Vercel.",
+      });
+      targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
+      return;
+    }
 
     fetchEnv(response, projectName).then((result) => {
       loadingUI.remove();
