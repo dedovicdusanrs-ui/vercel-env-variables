@@ -51,27 +51,28 @@ async function fetchProjectEnv(projectName) {
   const encryptedEnvVars =
     projectData.env?.map((env) => ({ id: env.id })) || [];
 
-  const envVars = [];
-  for (const encryptedEnv of encryptedEnvVars) {
-    const envResponse = await fetch(
-      `${VERCEL_URL}/api/v1/projects/${encodeURIComponent(
-        projectName
-      )}/env/${encodeURIComponent(encryptedEnv.id)}`,
-      fetchOptions
-    );
-
-    if (!envResponse.ok) {
-      throw new Error(
-        `Error: ${envResponse.status} - ${envResponse.statusText}`
+  const envVars = await Promise.all(
+    encryptedEnvVars.map(async ({ id }) => {
+      const envResponse = await fetch(
+        `${VERCEL_URL}/api/v1/projects/${encodeURIComponent(
+          projectName
+        )}/env/${encodeURIComponent(id)}`,
+        fetchOptions
       );
-    }
 
-    const envData = await envResponse.json();
-    envVars.push({
-      key: envData.key,
-      value: envData.value,
-    });
-  }
+      if (!envResponse.ok) {
+        throw new Error(
+          `Error: ${envResponse.status} - ${envResponse.statusText}`
+        );
+      }
+
+      const envData = await envResponse.json();
+      return {
+        key: envData.key,
+        value: envData.value,
+      };
+    })
+  );
 
   return { env: envVars };
 }
