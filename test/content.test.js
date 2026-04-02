@@ -12,6 +12,7 @@ global.navigator = {
 global.alert = () => {};
 global.MutationObserver = class {
   observe() {}
+  disconnect() {}
 };
 
 const {
