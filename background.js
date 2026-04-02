@@ -33,7 +33,9 @@ function normalizeProjectName(projectName) {
   const normalizedProjectName = typeof projectName === "string" ? projectName.trim() : "";
 
   if (!PROJECT_NAME_PATTERN.test(normalizedProjectName)) {
-    throw new Error("Invalid project name.");
+    throw new Error(
+      "Invalid project name. Only letters, numbers, dots, underscores, and hyphens are allowed."
+    );
   }
 
   return normalizedProjectName;
@@ -66,10 +68,12 @@ async function fetchProjectEnvironmentVariables(projectName) {
   return { env: envVariables };
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "FETCH_ENV_VARIABLES") {
     return false;
   }
+
+  void sender;
 
   fetchProjectEnvironmentVariables(message.projectName)
     .then((result) => sendResponse(result))

@@ -24,7 +24,11 @@ function requestEnvironmentVariables(projectName) {
           return;
         }
 
-        resolve(response || { error: "No response received from the background worker." });
+        resolve(
+          response && typeof response === "object"
+            ? response
+            : { error: "The background worker returned an invalid response." }
+        );
       }
     );
   });
