@@ -5,6 +5,8 @@ const TARGET_ELEMENT_SELECTOR =
 const EXTENSION_UI_ID = "vercel-env-variables-export-card";
 const STATUS_MESSAGE_DURATION_MS = 2500;
 const NAVIGATION_RENDER_DELAY_MS = 1000;
+let initializeRequestId = 0;
+let navigationTimeoutId = null;
 
 function getProjectName() {
   return document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
@@ -86,6 +88,7 @@ function showStatusMessage(message, isError = false) {
 }
 
 async function initializeUI() {
+  const requestId = ++initializeRequestId;
   const targetElement = document.querySelector(TARGET_ELEMENT_SELECTOR);
 
   if (!targetElement?.parentNode) {
@@ -106,6 +109,10 @@ async function initializeUI() {
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
   const result = await requestEnvironmentVariables(projectName);
+
+  if (requestId !== initializeRequestId) {
+    return;
+  }
 
   loadingUI.replaceWith(createUI(result));
 }
@@ -225,7 +232,8 @@ new MutationObserver(() => {
 
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    setTimeout(() => {
+    clearTimeout(navigationTimeoutId);
+    navigationTimeoutId = setTimeout(() => {
       initializeUI();
     }, NAVIGATION_RENDER_DELAY_MS);
   }
