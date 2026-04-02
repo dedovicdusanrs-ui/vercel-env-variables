@@ -3,6 +3,8 @@ const PROJECT_NAME_SELECTOR =
 const TARGET_ELEMENT_SELECTOR =
   "#environment-variables-fieldset > span:nth-child(5)";
 const EXTENSION_UI_ID = "vercel-env-variables-export-card";
+const STATUS_MESSAGE_DURATION_MS = 2500;
+const NAVIGATION_RENDER_DELAY_MS = 1000;
 
 function getProjectName() {
   return document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
@@ -76,7 +78,7 @@ function showStatusMessage(message, isError = false) {
 
   setTimeout(() => {
     status.remove();
-  }, 2500);
+  }, STATUS_MESSAGE_DURATION_MS);
 }
 
 async function initializeUI() {
@@ -216,6 +218,6 @@ new MutationObserver(() => {
     lastUrl = currentUrl;
     setTimeout(() => {
       initializeUI();
-    }, 1000);
+    }, NAVIGATION_RENDER_DELAY_MS);
   }
 }).observe(document, { subtree: true, childList: true });

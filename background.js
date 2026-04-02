@@ -1,3 +1,5 @@
+const PROJECT_NAME_PATTERN = /^[\w.-]+$/;
+
 async function getAuthorizationCookie() {
   const cookie = await chrome.cookies.get({
     url: "https://vercel.com",
@@ -27,9 +29,19 @@ async function fetchJson(url, authorizationCookie) {
   return response.json();
 }
 
+function normalizeProjectName(projectName) {
+  const normalizedProjectName = typeof projectName === "string" ? projectName.trim() : "";
+
+  if (!PROJECT_NAME_PATTERN.test(normalizedProjectName)) {
+    throw new Error("Invalid project name.");
+  }
+
+  return normalizedProjectName;
+}
+
 async function fetchProjectEnvironmentVariables(projectName) {
   const authorizationCookie = await getAuthorizationCookie();
-  const encodedProjectName = encodeURIComponent(projectName);
+  const encodedProjectName = encodeURIComponent(normalizeProjectName(projectName));
 
   const projectData = await fetchJson(
     `https://vercel.com/api/v9/projects/${encodedProjectName}`,
