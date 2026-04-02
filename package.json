@@ -1,0 +1,7 @@
+{
+  "name": "vercel-env-variables",
+  "private": true,
+  "scripts": {
+    "test": "node --test --experimental-test-coverage"
+  }
+}
