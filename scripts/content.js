@@ -55,7 +55,9 @@ function fetchEnv(projectName) {
           return;
         }
 
-        resolve(response || { error: "Failed to fetch environment variables." });
+        resolve(
+          response || { error: "No response received from the background service." }
+        );
       }
     );
   });

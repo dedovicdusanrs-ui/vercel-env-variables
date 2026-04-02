@@ -85,8 +85,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  if (!isAllowedSender(sender) || !message.projectName) {
-    sendResponse({ error: "Invalid request." });
+  if (!isAllowedSender(sender)) {
+    sendResponse({ error: "Unauthorized sender." });
+    return false;
+  }
+
+  if (!message.projectName) {
+    sendResponse({ error: "Project name is required." });
     return false;
   }
 
