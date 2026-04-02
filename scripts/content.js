@@ -74,7 +74,7 @@ function showStatusMessage(message, isError = false) {
   const container = document.getElementById(EXTENSION_UI_ID);
   container?.appendChild(status);
 
-  window.setTimeout(() => {
+  setTimeout(() => {
     status.remove();
   }, 2500);
 }
@@ -214,7 +214,7 @@ new MutationObserver(() => {
 
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    window.setTimeout(() => {
+    setTimeout(() => {
       initializeUI();
     }, 1000);
   }

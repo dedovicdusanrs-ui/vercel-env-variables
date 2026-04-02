@@ -37,19 +37,19 @@ async function fetchProjectEnvironmentVariables(projectName) {
   );
 
   const envEntries = Array.isArray(projectData.env) ? projectData.env : [];
-  const envVariables = [];
+  const envVariables = await Promise.all(
+    envEntries.map(async (envEntry) => {
+      const envData = await fetchJson(
+        `https://vercel.com/api/v1/projects/${encodedProjectName}/env/${envEntry.id}`,
+        authorizationCookie
+      );
 
-  for (const envEntry of envEntries) {
-    const envData = await fetchJson(
-      `https://vercel.com/api/v1/projects/${encodedProjectName}/env/${envEntry.id}`,
-      authorizationCookie
-    );
-
-    envVariables.push({
+      return {
       key: envData.key,
       value: envData.value,
-    });
-  }
+      };
+    })
+  );
 
   return { env: envVariables };
 }
