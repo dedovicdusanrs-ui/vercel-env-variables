@@ -232,7 +232,9 @@ new MutationObserver(() => {
 
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    clearTimeout(navigationTimeoutId);
+    if (navigationTimeoutId !== null) {
+      clearTimeout(navigationTimeoutId);
+    }
     navigationTimeoutId = setTimeout(() => {
       initializeUI();
     }, NAVIGATION_RENDER_DELAY_MS);

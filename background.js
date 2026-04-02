@@ -32,6 +32,10 @@ async function fetchJson(url, authorizationCookie) {
 function normalizeProjectName(projectName) {
   const normalizedProjectName = typeof projectName === "string" ? projectName.trim() : "";
 
+  if (!normalizedProjectName) {
+    throw new Error("Project name is required.");
+  }
+
   if (!VALID_PROJECT_NAME_PATTERN.test(normalizedProjectName)) {
     throw new Error(
       "Invalid project name. Only letters, numbers, underscores, and hyphens are allowed."
