@@ -2,15 +2,17 @@ const PROJECT_NAME_SELECTOR =
   "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p";
 const TARGET_SELECTOR = "#environment-variables-fieldset > span:nth-child(5)";
 const EXTENSION_ROOT_ID = "vercel-env-variables-extension-root";
+const PROJECT_API_BASE_URL = "https://vercel.com/api";
 let activeRequestId = 0;
 
 function buildProjectApiUrl(projectName) {
   const encodedProjectName = encodeURIComponent(projectName);
-  return `https://vercel.com/api/v9/projects/${encodedProjectName}`;
+  return `${PROJECT_API_BASE_URL}/v9/projects/${encodedProjectName}`;
 }
 
 function buildProjectEnvApiUrl(projectName, envId) {
-  return `${buildProjectApiUrl(projectName).replace("/api/v9", "/api/v1")}/env/${envId}`;
+  const encodedProjectName = encodeURIComponent(projectName);
+  return `${PROJECT_API_BASE_URL}/v1/projects/${encodedProjectName}/env/${envId}`;
 }
 
 function buildEnvContent(envArray) {
@@ -101,7 +103,21 @@ function downloadEnvFile(filename, envArray) {
 }
 
 function getProjectName() {
-  return document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
+  const projectName =
+    document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
+
+  if (projectName) {
+    return projectName;
+  }
+
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const settingsIndex = pathSegments.indexOf("settings");
+
+  if (settingsIndex > 0) {
+    return decodeURIComponent(pathSegments[settingsIndex - 1]);
+  }
+
+  return "";
 }
 
 function initializeUI() {
@@ -130,6 +146,7 @@ function initializeUI() {
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
   fetchEnv(projectName).then((result) => {
+    // Prevent stale async responses from replacing the UI after a later re-initialization.
     if (requestId !== activeRequestId || !targetElement.isConnected) {
       if (loadingUI.isConnected) {
         loadingUI.remove();
@@ -211,7 +228,7 @@ function createUI(isLoading = true, result = null) {
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
     errorDiv.textContent = `Error: ${result.error}`;
     stackDiv.appendChild(errorDiv);
-  } else if (result?.env?.length) {
+  } else if (Array.isArray(result?.env) && result.env.length > 0) {
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = "display: flex; gap: 8px; justify-content: space-between;";
 
