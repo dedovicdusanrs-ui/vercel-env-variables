@@ -26,14 +26,16 @@ async function fetchEnv(authorizationCookie, projectName) {
       })) || [];
 
     const envVars = [];
-    for (encryptedEnv of encryptedEnvVars) {
+    for (const encryptedEnv of encryptedEnvVars) {
       const envResponse = await fetch(
         `https://vercel.com/api/v1/projects/${projectName}/env/${encryptedEnv.id}`,
         fetchOptions
       );
 
       if (!envResponse.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+        throw new Error(
+          `Error: ${envResponse.status} - ${envResponse.statusText}`
+        );
       }
 
       const envData = await envResponse.json();

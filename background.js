@@ -9,6 +9,11 @@ chrome.cookies.get(
       return;
     }
 
+    if (!cookie?.value) {
+      console.error("Authorization cookie not found.");
+      return;
+    }
+
     console.log("Authorization Cookie:", cookie);
     authorization = cookie.value;
   }
