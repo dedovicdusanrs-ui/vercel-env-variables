@@ -104,27 +104,30 @@ function initializeUI({
 
   if (!targetElement) {
     logger.error("Target element not found!");
-    return;
+    return Promise.resolve(null);
   }
 
   if (!projectName) {
     logger.error("Project name not found!");
     const errorUI = createUIFn(false, { error: "Project name not found. Please refresh the page." });
     targetElement.parentNode.insertBefore(errorUI, targetElement.nextSibling);
-    return;
+    return Promise.resolve(errorUI);
   }
 
   const loadingUI = createUIFn(true);
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
-  chromeApi.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    logger.log("Response: ", response);
+  return new Promise((resolve) => {
+    chromeApi.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
+      logger.log("Response: ", response);
 
-    fetchEnvFn(response, projectName).then((result) => {
-      loadingUI.remove();
+      fetchEnvFn(response, projectName).then((result) => {
+        loadingUI.remove();
 
-      const resultUI = createUIFn(false, result);
-      targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
+        const resultUI = createUIFn(false, result);
+        targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
+        resolve(resultUI);
+      });
     });
   });
 }

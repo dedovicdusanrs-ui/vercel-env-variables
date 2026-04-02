@@ -110,7 +110,7 @@ describe("scripts/content.js", () => {
   it("downloads an env file with the expected filename", () => {
     const appendedNodes = [];
     const removedNodes = [];
-    const clickSpy = vi.spyOn(window.HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const clickMock = vi.spyOn(window.HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     const createObjectURL = vi.fn(() => "blob:download");
     const revokeObjectURL = vi.fn();
     const body = {
@@ -140,7 +140,7 @@ describe("scripts/content.js", () => {
     expect(doc.createElement).toHaveBeenCalledWith("a");
     expect(link.download).toBe(".env");
     expect(link.href).toBe("blob:download");
-    expect(clickSpy).toHaveBeenCalled();
+    expect(clickMock).toHaveBeenCalled();
     expect(removedNodes[0]).toBe(link);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:download");
   });
@@ -197,14 +197,16 @@ describe("scripts/content.js", () => {
         <span></span><span></span><span></span><span></span><span id="target"></span>
       </div>
     `;
-    const fetchEnvFn = vi.fn().mockResolvedValue({
-      env: [{ key: "TOKEN", value: "secret" }],
+    let resolveFetch;
+    const fetchEnvPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
     });
+    const fetchEnvFn = vi.fn().mockReturnValue(fetchEnvPromise);
     const sendMessage = vi.fn((_message, callback) => callback("auth-token"));
     const logger = { error: vi.fn(), log: vi.fn() };
     const { initializeUI } = require("../scripts/content.js");
 
-    initializeUI({
+    const initializePromise = initializeUI({
       chromeApi: { runtime: { sendMessage } },
       doc: document,
       fetchEnvFn,
@@ -214,14 +216,16 @@ describe("scripts/content.js", () => {
 
     expect(document.body.textContent).toContain("Loading environment variables...");
 
-    await Promise.resolve();
-    await Promise.resolve();
-
     expect(sendMessage).toHaveBeenCalledWith(
       { text: "getAuthorization" },
       expect.any(Function)
     );
     expect(fetchEnvFn).toHaveBeenCalledWith("auth-token", "demo-project");
+    resolveFetch({ env: [{ key: "TOKEN", value: "secret" }] });
+
+    const result = await initializePromise;
+
+    expect(result).toBeTruthy();
     expect(document.body.textContent).toContain("Copy");
     expect(document.body.textContent).toContain(".env");
     expect(document.body.textContent).not.toContain("Loading environment variables...");
