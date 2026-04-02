@@ -1,19 +1,50 @@
 let authorization = "EMPTY";
 
-// get authorization cookie
-chrome.cookies.get(
-  { url: "https://vercel.com", name: "authorization" },
-  (cookie) => {
-    if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError);
-      return;
+function setAuthorization(value = "EMPTY") {
+  authorization = value;
+  return authorization;
+}
+
+function getAuthorization() {
+  return authorization;
+}
+
+function loadAuthorizationCookie(chromeApi = chrome, logger = console) {
+  chromeApi.cookies.get(
+    { url: "https://vercel.com", name: "authorization" },
+    (cookie) => {
+      if (chromeApi.runtime.lastError) {
+        logger.error(chromeApi.runtime.lastError);
+        return;
+      }
+
+      logger.log("Authorization Cookie:", cookie);
+      setAuthorization(cookie?.value ?? "EMPTY");
     }
+  );
+}
 
-    console.log("Authorization Cookie:", cookie);
-    authorization = cookie.value;
-  }
-);
+function registerMessageListener(chromeApi = chrome) {
+  chromeApi.runtime.onMessage.addListener(function (_msg, _sender, sendResponse) {
+    sendResponse(getAuthorization());
+  });
+}
 
-chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-  sendResponse(authorization);
-});
+function initializeBackground(chromeApi = chrome, logger = console) {
+  loadAuthorizationCookie(chromeApi, logger);
+  registerMessageListener(chromeApi);
+}
+
+if (typeof chrome !== "undefined" && chrome?.cookies && chrome?.runtime?.onMessage) {
+  initializeBackground();
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    getAuthorization,
+    initializeBackground,
+    loadAuthorizationCookie,
+    registerMessageListener,
+    setAuthorization,
+  };
+}

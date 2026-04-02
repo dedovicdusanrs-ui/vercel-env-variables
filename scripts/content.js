@@ -1,4 +1,8 @@
-async function fetchEnv(authorizationCookie, projectName) {
+const PROJECT_NAME_SELECTOR =
+  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p";
+const TARGET_ELEMENT_SELECTOR = "#environment-variables-fieldset > span:nth-child(5)";
+
+async function fetchEnv(authorizationCookie, projectName, fetchImpl = fetch, logger = console) {
   const apiUrl = `https://vercel.com/api/v9/projects/${projectName}`;
   const cookieHeader = `${"authorization"}=${authorizationCookie};`;
 
@@ -10,7 +14,7 @@ async function fetchEnv(authorizationCookie, projectName) {
         Cookie: cookieHeader,
       },
     };
-    const response = await fetch(apiUrl, fetchOptions);
+    const response = await fetchImpl(apiUrl, fetchOptions);
 
     if (!response.ok) {
       throw new Error(`Error: ${response.status} - ${response.statusText}`);
@@ -26,14 +30,14 @@ async function fetchEnv(authorizationCookie, projectName) {
       })) || [];
 
     const envVars = [];
-    for (encryptedEnv of encryptedEnvVars) {
-      const envResponse = await fetch(
+    for (const encryptedEnv of encryptedEnvVars) {
+      const envResponse = await fetchImpl(
         `https://vercel.com/api/v1/projects/${projectName}/env/${encryptedEnv.id}`,
         fetchOptions
       );
 
       if (!envResponse.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+        throw new Error(`Error: ${envResponse.status} - ${envResponse.statusText}`);
       }
 
       const envData = await envResponse.json();
@@ -46,98 +50,120 @@ async function fetchEnv(authorizationCookie, projectName) {
 
     return { env: envVars };
   } catch (error) {
-    console.error("Failed to fetch project data:", error);
+    logger.error("Failed to fetch project data:", error);
     return { error: error.message };
   }
 }
 
-function copyAllEnv(envArray) {
+function copyAllEnv(envArray, navigatorApi = navigator, alertFn = alert, logger = console) {
   const envContent = envArray
     .map((env) => `${env.key}=${env.value}`)
     .join("\n");
-  navigator.clipboard
+  return navigatorApi.clipboard
     .writeText(envContent)
     .then(() => {
-      alert("All ENV variables copied to clipboard!");
+      alertFn("All ENV variables copied to clipboard!");
     })
     .catch((err) => {
-      console.error("Failed to copy ENV variables:", err);
+      logger.error("Failed to copy ENV variables:", err);
     });
 }
 
-function downloadEnvFile(filename, envArray) {
+function downloadEnvFile(filename, envArray, doc = document, win = window) {
   const envContent = envArray
     .map((env) => `${env.key}=${env.value}`)
     .join("\n");
 
   const blob = new Blob([envContent], { type: "text/plain" });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const url = win.URL.createObjectURL(blob);
+  const link = doc.createElement("a");
 
   link.href = url;
   link.download = filename;
 
-  document.body.appendChild(link);
+  doc.body.appendChild(link);
   link.click();
 
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  doc.body.removeChild(link);
+  win.URL.revokeObjectURL(url);
 }
 
-const projectName = document.querySelector(
-  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p"
-)?.textContent;
+function getProjectName(doc = document) {
+  return doc.querySelector(PROJECT_NAME_SELECTOR)?.textContent ?? null;
+}
 
-function initializeUI() {
-  const targetElement = document.querySelector(
-    "#environment-variables-fieldset > span:nth-child(5)"
-  );
+function initializeUI({
+  chromeApi = chrome,
+  createUIFn = createUI,
+  doc = document,
+  fetchEnvFn = fetchEnv,
+  logger = console,
+  projectName = getProjectName(doc),
+} = {}) {
+  const targetElement = doc.querySelector(TARGET_ELEMENT_SELECTOR);
 
   if (!targetElement) {
-    console.error("Target element not found!");
+    logger.error("Target element not found!");
     return;
   }
 
   if (!projectName) {
-    console.error("Project name not found!");
-    const errorUI = createUI(false, { error: "Project name not found. Please refresh the page." });
+    logger.error("Project name not found!");
+    const errorUI = createUIFn(false, { error: "Project name not found. Please refresh the page." });
     targetElement.parentNode.insertBefore(errorUI, targetElement.nextSibling);
     return;
   }
 
-  const loadingUI = createUI(true);
+  const loadingUI = createUIFn(true);
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
-  chrome.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    console.log("Response: ", response);
+  chromeApi.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
+    logger.log("Response: ", response);
 
-    fetchEnv(response, projectName).then((result) => {
+    fetchEnvFn(response, projectName).then((result) => {
       loadingUI.remove();
 
-      const resultUI = createUI(false, result);
+      const resultUI = createUIFn(false, result);
       targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
     });
   });
 }
 
-initializeUI();
+function observeUrlChanges({
+  doc = document,
+  initializeUIFn = initializeUI,
+  observerImpl = MutationObserver,
+  timeoutFn = setTimeout,
+  win = window,
+} = {}) {
+  let lastUrl = win.location.href;
+  const observer = new observerImpl(() => {
+    const currentUrl = win.location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      timeoutFn(() => initializeUIFn(), 1000);
+    }
+  });
 
-let lastUrl = location.href;
-new MutationObserver(() => {
-  const currentUrl = location.href;
-  if (currentUrl !== lastUrl) {
-    lastUrl = currentUrl;
-    setTimeout(initializeUI, 1000);
-  }
-}).observe(document, { subtree: true, childList: true });
+  observer.observe(doc, { subtree: true, childList: true });
+  return observer;
+}
 
-function createUI(isLoading = true, result = null) {
-  const headingContainer = document.createElement("div");
+function createUI(
+  isLoading = true,
+  result = null,
+  {
+    copyHandler = copyAllEnv,
+    doc = document,
+    downloadHandler = downloadEnvFile,
+  } = {}
+) {
+  const headingContainer = doc.createElement("div");
   headingContainer.className = "stack_stack__iZkUS stack";
   headingContainer.setAttribute("data-version", "v1");
   headingContainer.style.cssText = "--stack-flex: initial; --stack-direction: row; --stack-align: center; --stack-justify: flex-start; --stack-padding: 0px; --stack-gap: 8px;";
 
-  const heading = document.createElement("h3");
+  const heading = doc.createElement("h3");
   heading.className = "text_wrapper__i87JK";
   heading.setAttribute("data-version", "v1");
   heading.style.cssText = "--text-color: var(--ds-gray-1000); --text-size: 1rem; --text-line-height: 1.5rem;  --text-letter-spacing: -0.020625rem; --text-weight: 600; padding-bottom: 8px;";
@@ -145,17 +171,17 @@ function createUI(isLoading = true, result = null) {
 
   headingContainer.appendChild(heading);
 
-  const cardContainer = document.createElement("div");
+  const cardContainer = doc.createElement("div");
   cardContainer.className = "geist-themed geist-default entity_form__ly2Cv geist-text p";
   cardContainer.setAttribute("type", "default");
   
-  const stackDiv = document.createElement("div");
+  const stackDiv = doc.createElement("div");
   stackDiv.className = "stack_stack__iZkUS stack";
   stackDiv.setAttribute("data-version", "v1");
   stackDiv.style.cssText = "--stack-flex: initial; --stack-direction: column; --stack-align: start; --stack-justify: flex-start; --stack-padding: 0px; --stack-gap: 12px;";
 
   if (isLoading) {
-    const loadingDiv = document.createElement("div");
+    const loadingDiv = doc.createElement("div");
     loadingDiv.style.cssText = "display: flex; align-items: center; gap: 8px; color: var(--ds-gray-700);";
     loadingDiv.innerHTML = `
       <style>
@@ -175,16 +201,16 @@ function createUI(isLoading = true, result = null) {
     `;
     stackDiv.appendChild(loadingDiv);
   } else if (result?.error) {
-    const errorDiv = document.createElement("div");
+    const errorDiv = doc.createElement("div");
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
     errorDiv.textContent = `Error: ${result.error}`;
     stackDiv.appendChild(errorDiv);
   } else if (result?.env) {
-    const buttonContainer = document.createElement("div");
+    const buttonContainer = doc.createElement("div");
     buttonContainer.style.cssText = "display: flex; gap: 8px; justify-content: space-between;";
 
     // Copy all button
-    const copyButton = document.createElement("button");
+    const copyButton = doc.createElement("button");
     copyButton.className = "button_base__BjwbK reset_reset__KRyvc button_button__81573 reset_reset__KRyvc button_secondary__kMMNc button_small__iQMBm button_invert__YNhnn";
     copyButton.setAttribute("data-geist-button", "");
     copyButton.setAttribute("data-prefix", "true");
@@ -197,10 +223,10 @@ function createUI(isLoading = true, result = null) {
                       </svg>
                     </span>
                     <span class="button_content__1aE1_">Copy</span>`;
-    copyButton.addEventListener("click", () => copyAllEnv(result.env));
+    copyButton.addEventListener("click", () => copyHandler(result.env));
 
     // Download .env button
-    const downloadEnvButton = document.createElement("button");
+    const downloadEnvButton = doc.createElement("button");
     downloadEnvButton.className = copyButton.className;
     downloadEnvButton.setAttribute("data-geist-button", "");
     downloadEnvButton.setAttribute("data-prefix", "true");
@@ -213,7 +239,7 @@ function createUI(isLoading = true, result = null) {
                       </svg>
                     </span>
                     <span class="button_content__1aE1_">.env</span>`;
-    downloadEnvButton.addEventListener("click", () => downloadEnvFile(".env", result.env));
+    downloadEnvButton.addEventListener("click", () => downloadHandler(".env", result.env));
 
     buttonContainer.appendChild(copyButton);
     buttonContainer.appendChild(downloadEnvButton);
@@ -224,4 +250,36 @@ function createUI(isLoading = true, result = null) {
   cardContainer.appendChild(stackDiv);
 
   return cardContainer;
+}
+
+function startContentScript(dependencies = {}) {
+  initializeUI(dependencies);
+  return observeUrlChanges({
+    ...dependencies,
+    initializeUIFn: () => initializeUI(dependencies),
+  });
+}
+
+if (
+  typeof window !== "undefined" &&
+  typeof document !== "undefined" &&
+  typeof chrome !== "undefined" &&
+  chrome?.runtime?.sendMessage
+) {
+  startContentScript();
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    PROJECT_NAME_SELECTOR,
+    TARGET_ELEMENT_SELECTOR,
+    copyAllEnv,
+    createUI,
+    downloadEnvFile,
+    fetchEnv,
+    getProjectName,
+    initializeUI,
+    observeUrlChanges,
+    startContentScript,
+  };
 }
