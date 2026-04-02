@@ -112,9 +112,15 @@ function getProjectName() {
 
   const pathSegments = location.pathname.split("/").filter(Boolean);
   const settingsIndex = pathSegments.indexOf("settings");
+  const fallbackProjectName =
+    settingsIndex > 0 ? decodeURIComponent(pathSegments[settingsIndex - 1]) : "";
 
-  if (settingsIndex > 0) {
-    return decodeURIComponent(pathSegments[settingsIndex - 1]);
+  if (
+    fallbackProjectName &&
+    fallbackProjectName !== "projects" &&
+    fallbackProjectName !== "settings"
+  ) {
+    return fallbackProjectName;
   }
 
   return "";
@@ -146,7 +152,7 @@ function initializeUI() {
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
   fetchEnv(projectName).then((result) => {
-    // Prevent stale async responses from replacing the UI after a later re-initialization.
+    // Guard against race conditions when rapid SPA navigation starts a newer request.
     if (requestId !== activeRequestId || !targetElement.isConnected) {
       if (loadingUI.isConnected) {
         loadingUI.remove();
@@ -267,11 +273,16 @@ function createUI(isLoading = true, result = null) {
     buttonContainer.appendChild(copyButton);
     buttonContainer.appendChild(downloadEnvButton);
     stackDiv.appendChild(buttonContainer);
-  } else {
+  } else if (Array.isArray(result?.env) && result.env.length === 0) {
     const emptyDiv = document.createElement("div");
     emptyDiv.style.cssText = "color: var(--ds-gray-700); padding: 8px;";
     emptyDiv.textContent = "No environment variables found for this project.";
     stackDiv.appendChild(emptyDiv);
+  } else {
+    const fallbackErrorDiv = document.createElement("div");
+    fallbackErrorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
+    fallbackErrorDiv.textContent = "Unable to load environment variables.";
+    stackDiv.appendChild(fallbackErrorDiv);
   }
 
   const container = document.createElement("div");
