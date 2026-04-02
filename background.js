@@ -45,8 +45,8 @@ async function fetchProjectEnvironmentVariables(projectName) {
       );
 
       return {
-      key: envData.key,
-      value: envData.value,
+        key: envData.key,
+        value: envData.value,
       };
     })
   );

@@ -34,7 +34,7 @@ function copyAllEnv(envArray) {
   navigator.clipboard
     .writeText(envContent)
     .then(() => {
-      showStatusMessage("All environment variables copied to the clipboard.");
+      showStatusMessage("Environment variables copied successfully.");
     })
     .catch((error) => {
       console.error("Failed to copy environment variables:", error);
