@@ -152,6 +152,7 @@ function normalize(value) {
 }
 
 async function flushPromises() {
+  await new Promise((resolve) => setImmediate(resolve));
   await Promise.resolve();
   await Promise.resolve();
 }
@@ -372,6 +373,7 @@ test("copyAllEnv copies env values and shows a success alert", async () => {
     { key: "APP_URL", value: "https://example.com" },
   ]);
   await flushPromises();
+  await flushPromises();
 
   assert.deepStrictEqual(clipboardWrites, [
     "API_KEY=secret\nAPP_URL=https://example.com",
@@ -410,7 +412,7 @@ test("downloadEnvFile creates, clicks, and cleans up a temporary download link",
   context.downloadEnvFile(".env", [{ key: "API_KEY", value: "secret" }]);
 
   assert.equal(createObjectURLCalls.length, 1);
-  assert.deepStrictEqual(createObjectURLCalls[0].parts, ["API_KEY=secret"]);
+  assert.deepStrictEqual(normalize(createObjectURLCalls[0].parts), ["API_KEY=secret"]);
   assert.equal(createObjectURLCalls[0].type, "text/plain");
   assert.deepStrictEqual(revokeObjectURLCalls, ["blob:generated-url"]);
   assert.equal(document.body.children.length, 0);
@@ -472,7 +474,7 @@ test("initializeUI fetches env data and replaces the loading state with actions"
 
   await flushPromises();
 
-  assert.deepStrictEqual(sendMessageCalls, [{ text: "getAuthorization" }]);
+  assert.deepStrictEqual(normalize(sendMessageCalls), [{ text: "getAuthorization" }]);
   assert.equal(fetchCalls.length, 2);
   assert.equal(document.targetParent.children.length, 2);
   assert.match(

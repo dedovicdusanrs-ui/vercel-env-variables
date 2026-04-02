@@ -7,6 +7,10 @@ const vm = require("node:vm");
 const backgroundPath = path.join(__dirname, "..", "background.js");
 const backgroundSource = fs.readFileSync(backgroundPath, "utf8");
 
+function normalize(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function loadBackgroundScript({ cookie = { value: "token" }, lastError = null } = {}) {
   const logs = { error: [], log: [] };
   let messageListener;
@@ -51,7 +55,7 @@ test("background script stores the authorization cookie and returns it in messag
     response = value;
   });
 
-  assert.deepStrictEqual(chrome.cookies.lastRequest, {
+  assert.deepStrictEqual(normalize(chrome.cookies.lastRequest), {
     url: "https://vercel.com",
     name: "authorization",
   });
