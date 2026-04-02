@@ -1,56 +1,3 @@
-async function fetchEnv(authorizationCookie, projectName) {
-  const apiUrl = `https://vercel.com/api/v9/projects/${projectName}`;
-  const cookieHeader = `${"authorization"}=${authorizationCookie};`;
-
-  try {
-    const fetchOptions = {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: cookieHeader,
-      },
-    };
-    const response = await fetch(apiUrl, fetchOptions);
-
-    if (!response.ok) {
-      throw new Error(`Error: ${response.status} - ${response.statusText}`);
-    }
-
-    const projectData = await response.json();
-
-    const encryptedEnvVars =
-      projectData.env?.map((env) => ({
-        id: env.id,
-        key: env.key,
-        encryptedValue: env.value,
-      })) || [];
-
-    const envVars = [];
-    for (encryptedEnv of encryptedEnvVars) {
-      const envResponse = await fetch(
-        `https://vercel.com/api/v1/projects/${projectName}/env/${encryptedEnv.id}`,
-        fetchOptions
-      );
-
-      if (!envResponse.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
-      }
-
-      const envData = await envResponse.json();
-
-      envVars.push({
-        key: envData.key,
-        value: envData.value,
-      });
-    }
-
-    return { env: envVars };
-  } catch (error) {
-    console.error("Failed to fetch project data:", error);
-    return { error: error.message };
-  }
-}
-
 function copyAllEnv(envArray) {
   const envContent = envArray
     .map((env) => `${env.key}=${env.value}`)
@@ -84,9 +31,35 @@ function downloadEnvFile(filename, envArray) {
   window.URL.revokeObjectURL(url);
 }
 
-const projectName = document.querySelector(
-  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p"
-)?.textContent;
+const UI_CONTAINER_ID = "vercel-env-export-card";
+
+function getProjectName() {
+  return document
+    .querySelector(
+      "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p"
+    )
+    ?.textContent?.trim();
+}
+
+function removeExistingUI() {
+  document.getElementById(UI_CONTAINER_ID)?.remove();
+}
+
+function fetchEnv(projectName) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "fetchProjectEnv", projectName },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ error: chrome.runtime.lastError.message });
+          return;
+        }
+
+        resolve(response || { error: "Failed to fetch environment variables." });
+      }
+    );
+  });
+}
 
 function initializeUI() {
   const targetElement = document.querySelector(
@@ -98,9 +71,14 @@ function initializeUI() {
     return;
   }
 
+  const projectName = getProjectName();
+  removeExistingUI();
+
   if (!projectName) {
     console.error("Project name not found!");
-    const errorUI = createUI(false, { error: "Project name not found. Please refresh the page." });
+    const errorUI = createUI(false, {
+      error: "Project name not found. Please refresh the page.",
+    });
     targetElement.parentNode.insertBefore(errorUI, targetElement.nextSibling);
     return;
   }
@@ -108,15 +86,11 @@ function initializeUI() {
   const loadingUI = createUI(true);
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
-  chrome.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    console.log("Response: ", response);
+  fetchEnv(projectName).then((result) => {
+    loadingUI.remove();
 
-    fetchEnv(response, projectName).then((result) => {
-      loadingUI.remove();
-
-      const resultUI = createUI(false, result);
-      targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
-    });
+    const resultUI = createUI(false, result);
+    targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
   });
 }
 
@@ -146,6 +120,7 @@ function createUI(isLoading = true, result = null) {
   headingContainer.appendChild(heading);
 
   const cardContainer = document.createElement("div");
+  cardContainer.id = UI_CONTAINER_ID;
   cardContainer.className = "geist-themed geist-default entity_form__ly2Cv geist-text p";
   cardContainer.setAttribute("type", "default");
   
