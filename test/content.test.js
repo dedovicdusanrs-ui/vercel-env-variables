@@ -447,7 +447,13 @@ test("initializeUI inserts the result UI after requesting authorization and fetc
     hasTarget: true,
     fetchImpl: async (url) => {
       if (url.endsWith("/projects/demo-project")) {
-        return createResponse({ env: [] });
+        return createResponse({
+          env: [{ id: "env_1", key: "API_KEY", value: "encrypted-1" }],
+        });
+      }
+
+      if (url.endsWith("/env/env_1")) {
+        return createResponse({ key: "API_KEY", value: "abc123" });
       }
 
       throw new Error(`Unexpected fetch: ${url}`);
@@ -459,12 +465,21 @@ test("initializeUI inserts the result UI after requesting authorization and fetc
   assert.deepStrictEqual(JSON.parse(JSON.stringify(runtime.sendMessageCalls)), [
     { text: "getAuthorization" },
   ]);
-  assert.equal(runtime.fetchCalls.length, 1);
+  assert.equal(runtime.fetchCalls.length, 2);
   assert.equal(runtime.targetParent.children.length, 2);
 
   const insertedUi = runtime.targetParent.children[1];
   const buttons = walkTree(insertedUi, (node) => node.tagName === "button");
   assert.equal(buttons.length, 2);
+
+  buttons[0].click();
+  buttons[1].click();
+  await flushPromises();
+
+  assert.deepStrictEqual(runtime.clipboardWrites, ["API_KEY=abc123"]);
+  assert.deepStrictEqual(runtime.alerts, ["All ENV variables copied to clipboard!"]);
+  assert.equal(runtime.createObjectUrlCalls.length, 1);
+  assert.deepStrictEqual(runtime.revokeObjectUrlCalls, ["blob:1"]);
 });
 
 test("url changes schedule another UI initialization through the mutation observer", () => {

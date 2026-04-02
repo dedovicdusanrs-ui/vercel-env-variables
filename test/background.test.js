@@ -50,7 +50,7 @@ test("background.js reads the authorization cookie and returns it in messages", 
     cookie: { value: "vercel-auth" },
   });
 
-  assert.deepStrictEqual(cookieRequests, [
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(cookieRequests)), [
     { url: "https://vercel.com", name: "authorization" },
   ]);
   assert.equal(listeners.length, 1);
