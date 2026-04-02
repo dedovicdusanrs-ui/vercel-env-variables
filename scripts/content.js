@@ -230,6 +230,43 @@ function createButton(label, onClick) {
   return button;
 }
 
+function createLoadingIndicator() {
+  const loadingDiv = document.createElement("div");
+  loadingDiv.style.cssText =
+    "display: flex; align-items: center; gap: 8px; color: var(--ds-gray-700);";
+
+  const spinner = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  spinner.setAttribute("width", "16");
+  spinner.setAttribute("height", "16");
+  spinner.setAttribute("viewBox", "0 0 16 16");
+  spinner.style.cssText = "animation: vercel-env-spin 1s linear infinite;";
+
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("cx", "8");
+  circle.setAttribute("cy", "8");
+  circle.setAttribute("r", "7");
+  circle.setAttribute("fill", "none");
+  circle.setAttribute("stroke", "currentColor");
+  circle.setAttribute("stroke-width", "2");
+  circle.setAttribute("stroke-dasharray", "44");
+  circle.setAttribute("stroke-dashoffset", "22");
+  circle.setAttribute("stroke-linecap", "round");
+
+  const style = document.createElement("style");
+  style.textContent =
+    "@keyframes vercel-env-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+
+  spinner.appendChild(circle);
+  loadingDiv.appendChild(style);
+  loadingDiv.appendChild(spinner);
+
+  const loadingText = document.createElement("span");
+  loadingText.textContent = "Loading environment variables...";
+  loadingDiv.appendChild(loadingText);
+
+  return loadingDiv;
+}
+
 function createUI(isLoading = true, result = null) {
   const cardContainer = document.createElement("div");
   cardContainer.id = EXPORT_CARD_ID;
@@ -258,11 +295,7 @@ function createUI(isLoading = true, result = null) {
     "--stack-flex: initial; --stack-direction: column; --stack-align: start; --stack-justify: flex-start; --stack-padding: 0px; --stack-gap: 12px;";
 
   if (isLoading) {
-    const loadingDiv = document.createElement("div");
-    loadingDiv.style.cssText =
-      "display: flex; align-items: center; gap: 8px; color: var(--ds-gray-700);";
-    loadingDiv.textContent = "Loading environment variables...";
-    stackDiv.appendChild(loadingDiv);
+    stackDiv.appendChild(createLoadingIndicator());
   } else if (result?.error) {
     const errorDiv = document.createElement("div");
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
@@ -288,11 +321,35 @@ function createUI(isLoading = true, result = null) {
 initializeUI();
 
 let lastUrl = location.href;
+let initializeQueued = false;
+
+function queueInitializeUI() {
+  if (initializeQueued) {
+    return;
+  }
+
+  initializeQueued = true;
+
+  requestAnimationFrame(() => {
+    initializeQueued = false;
+    initializeUI();
+  });
+}
+
 new MutationObserver(() => {
   const currentUrl = location.href;
 
   if (currentUrl !== lastUrl) {
     lastUrl = currentUrl;
-    setTimeout(initializeUI, 1000);
+    queueInitializeUI();
+    return;
+  }
+
+  if (isEnvironmentVariablesPage()) {
+    const targetElement = document.querySelector(TARGET_SELECTOR);
+
+    if (targetElement && !document.getElementById(EXPORT_CARD_ID)) {
+      queueInitializeUI();
+    }
   }
 }).observe(document, { subtree: true, childList: true });
