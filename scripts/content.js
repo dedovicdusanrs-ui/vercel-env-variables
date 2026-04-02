@@ -1,16 +1,36 @@
-async function fetchEnv(authorizationCookie, projectName) {
-  const apiUrl = `https://vercel.com/api/v9/projects/${projectName}`;
-  const cookieHeader = `${"authorization"}=${authorizationCookie};`;
+const PROJECT_NAME_SELECTOR =
+  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p";
+const TARGET_SELECTOR = "#environment-variables-fieldset > span:nth-child(5)";
+const EXTENSION_ROOT_ID = "vercel-env-variables-extension-root";
+let activeRequestId = 0;
+
+function buildProjectApiUrl(projectName) {
+  const encodedProjectName = encodeURIComponent(projectName);
+  return `https://vercel.com/api/v9/projects/${encodedProjectName}`;
+}
+
+function buildProjectEnvApiUrl(projectName, envId) {
+  return `${buildProjectApiUrl(projectName).replace("/api/v9", "/api/v1")}/env/${envId}`;
+}
+
+function buildEnvContent(envArray) {
+  return envArray.map((env) => `${env.key}=${env.value}`).join("\n");
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+async function fetchEnv(projectName) {
+  const apiUrl = buildProjectApiUrl(projectName);
 
   try {
-    const fetchOptions = {
+    const response = await fetch(apiUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        Cookie: cookieHeader,
       },
-    };
-    const response = await fetch(apiUrl, fetchOptions);
+    });
 
     if (!response.ok) {
       throw new Error(`Error: ${response.status} - ${response.statusText}`);
@@ -18,43 +38,41 @@ async function fetchEnv(authorizationCookie, projectName) {
 
     const projectData = await response.json();
 
-    const encryptedEnvVars =
-      projectData.env?.map((env) => ({
-        id: env.id,
-        key: env.key,
-        encryptedValue: env.value,
-      })) || [];
+    const envIds = projectData.env?.map((env) => env.id) || [];
 
-    const envVars = [];
-    for (encryptedEnv of encryptedEnvVars) {
-      const envResponse = await fetch(
-        `https://vercel.com/api/v1/projects/${projectName}/env/${encryptedEnv.id}`,
-        fetchOptions
-      );
+    const envVars = await Promise.all(
+      envIds.map(async (envId) => {
+        const envResponse = await fetch(buildProjectEnvApiUrl(projectName, envId), {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-      if (!envResponse.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
-      }
+        if (!envResponse.ok) {
+          throw new Error(
+            `Error: ${envResponse.status} - ${envResponse.statusText}`
+          );
+        }
 
-      const envData = await envResponse.json();
+        const envData = await envResponse.json();
 
-      envVars.push({
-        key: envData.key,
-        value: envData.value,
-      });
-    }
+        return {
+          key: envData.key,
+          value: envData.value,
+        };
+      })
+    );
 
     return { env: envVars };
   } catch (error) {
     console.error("Failed to fetch project data:", error);
-    return { error: error.message };
+    return { error: getErrorMessage(error) };
   }
 }
 
 function copyAllEnv(envArray) {
-  const envContent = envArray
-    .map((env) => `${env.key}=${env.value}`)
-    .join("\n");
+  const envContent = buildEnvContent(envArray);
   navigator.clipboard
     .writeText(envContent)
     .then(() => {
@@ -66,9 +84,7 @@ function copyAllEnv(envArray) {
 }
 
 function downloadEnvFile(filename, envArray) {
-  const envContent = envArray
-    .map((env) => `${env.key}=${env.value}`)
-    .join("\n");
+  const envContent = buildEnvContent(envArray);
 
   const blob = new Blob([envContent], { type: "text/plain" });
   const url = window.URL.createObjectURL(blob);
@@ -84,23 +100,28 @@ function downloadEnvFile(filename, envArray) {
   window.URL.revokeObjectURL(url);
 }
 
-const projectName = document.querySelector(
-  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p"
-)?.textContent;
+function getProjectName() {
+  return document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
+}
 
 function initializeUI() {
-  const targetElement = document.querySelector(
-    "#environment-variables-fieldset > span:nth-child(5)"
-  );
+  const targetElement = document.querySelector(TARGET_SELECTOR);
+  const requestId = ++activeRequestId;
 
   if (!targetElement) {
-    console.error("Target element not found!");
     return;
   }
 
+  const existingUI = document.getElementById(EXTENSION_ROOT_ID);
+  if (existingUI) {
+    existingUI.remove();
+  }
+
+  const projectName = getProjectName();
   if (!projectName) {
-    console.error("Project name not found!");
-    const errorUI = createUI(false, { error: "Project name not found. Please refresh the page." });
+    const errorUI = createUI(false, {
+      error: "Project name not found. Please refresh the page.",
+    });
     targetElement.parentNode.insertBefore(errorUI, targetElement.nextSibling);
     return;
   }
@@ -108,28 +129,39 @@ function initializeUI() {
   const loadingUI = createUI(true);
   targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
 
-  chrome.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    console.log("Response: ", response);
+  fetchEnv(projectName).then((result) => {
+    if (requestId !== activeRequestId || !targetElement.isConnected) {
+      if (loadingUI.isConnected) {
+        loadingUI.remove();
+      }
+      return;
+    }
 
-    fetchEnv(response, projectName).then((result) => {
-      loadingUI.remove();
+    loadingUI.remove();
 
-      const resultUI = createUI(false, result);
-      targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
-    });
+    const resultUI = createUI(false, result);
+    targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
   });
 }
 
-initializeUI();
+if (
+  typeof document !== "undefined" &&
+  typeof location !== "undefined" &&
+  typeof MutationObserver !== "undefined"
+) {
+  initializeUI();
 
-let lastUrl = location.href;
-new MutationObserver(() => {
-  const currentUrl = location.href;
-  if (currentUrl !== lastUrl) {
-    lastUrl = currentUrl;
-    setTimeout(initializeUI, 1000);
-  }
-}).observe(document, { subtree: true, childList: true });
+  let lastUrl = location.href;
+  let initializeTimeoutId;
+  new MutationObserver(() => {
+    const currentUrl = location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      clearTimeout(initializeTimeoutId);
+      initializeTimeoutId = setTimeout(initializeUI, 1000);
+    }
+  }).observe(document, { subtree: true, childList: true });
+}
 
 function createUI(isLoading = true, result = null) {
   const headingContainer = document.createElement("div");
@@ -179,7 +211,7 @@ function createUI(isLoading = true, result = null) {
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
     errorDiv.textContent = `Error: ${result.error}`;
     stackDiv.appendChild(errorDiv);
-  } else if (result?.env) {
+  } else if (result?.env?.length) {
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = "display: flex; gap: 8px; justify-content: space-between;";
 
@@ -218,10 +250,27 @@ function createUI(isLoading = true, result = null) {
     buttonContainer.appendChild(copyButton);
     buttonContainer.appendChild(downloadEnvButton);
     stackDiv.appendChild(buttonContainer);
+  } else {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText = "color: var(--ds-gray-700); padding: 8px;";
+    emptyDiv.textContent = "No environment variables found for this project.";
+    stackDiv.appendChild(emptyDiv);
   }
 
-  cardContainer.appendChild(headingContainer);
+  const container = document.createElement("div");
+  container.id = EXTENSION_ROOT_ID;
+  container.appendChild(headingContainer);
   cardContainer.appendChild(stackDiv);
+  container.appendChild(cardContainer);
 
-  return cardContainer;
+  return container;
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    buildEnvContent,
+    buildProjectApiUrl,
+    buildProjectEnvApiUrl,
+    getErrorMessage,
+  };
 }
