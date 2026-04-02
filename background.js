@@ -1,19 +1,27 @@
-let authorization = "EMPTY";
+function getAuthorization(sendResponse) {
+  chrome.cookies.get(
+    { url: "https://vercel.com", name: "authorization" },
+    (cookie) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ error: "Unable to access the Vercel authorization cookie." });
+        return;
+      }
 
-// get authorization cookie
-chrome.cookies.get(
-  { url: "https://vercel.com", name: "authorization" },
-  (cookie) => {
-    if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError);
-      return;
+      if (!cookie?.value) {
+        sendResponse({ error: "Vercel authorization cookie not found." });
+        return;
+      }
+
+      sendResponse({ authorization: cookie.value });
     }
+  );
+}
 
-    console.log("Authorization Cookie:", cookie);
-    authorization = cookie.value;
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.text !== "getAuthorization") {
+    return false;
   }
-);
 
-chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-  sendResponse(authorization);
+  getAuthorization(sendResponse);
+  return true;
 });

@@ -10,8 +10,7 @@
     "128": "assets/icons/icon-128x128.png"
   },
   "permissions": ["cookies"],
-
-  "host_permissions": ["*://vercel.com/*"],
+  "host_permissions": ["https://vercel.com/*"],
 
   "content_scripts": [
     {
@@ -24,5 +23,8 @@
   },
   "action": {
     "default_popup": "./popup/popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
