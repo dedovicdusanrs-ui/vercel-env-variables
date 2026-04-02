@@ -1,5 +1,13 @@
+const EXPORT_UI_ID = "vercel-env-variables-export";
+const ENVIRONMENT_FIELDSET_SELECTOR = "#environment-variables-fieldset";
+const PROJECT_NAME_SELECTOR =
+  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p";
+const BUTTON_CLASS_NAME =
+  "button_base__BjwbK reset_reset__KRyvc button_button__81573 reset_reset__KRyvc button_secondary__kMMNc button_small__iQMBm button_invert__YNhnn";
+
 async function fetchEnv(authorizationCookie, projectName) {
-  const apiUrl = `https://vercel.com/api/v9/projects/${projectName}`;
+  const normalizedProjectName = encodeURIComponent(projectName);
+  const apiUrl = `https://vercel.com/api/v9/projects/${normalizedProjectName}`;
   const cookieHeader = `${"authorization"}=${authorizationCookie};`;
 
   try {
@@ -26,14 +34,16 @@ async function fetchEnv(authorizationCookie, projectName) {
       })) || [];
 
     const envVars = [];
-    for (encryptedEnv of encryptedEnvVars) {
+    for (const encryptedEnv of encryptedEnvVars) {
       const envResponse = await fetch(
-        `https://vercel.com/api/v1/projects/${projectName}/env/${encryptedEnv.id}`,
+        `https://vercel.com/api/v1/projects/${normalizedProjectName}/env/${encryptedEnv.id}`,
         fetchOptions
       );
 
       if (!envResponse.ok) {
-        throw new Error(`Error: ${response.status} - ${response.statusText}`);
+        throw new Error(
+          `Error: ${envResponse.status} - ${envResponse.statusText}`
+        );
       }
 
       const envData = await envResponse.json();
@@ -49,6 +59,16 @@ async function fetchEnv(authorizationCookie, projectName) {
     console.error("Failed to fetch project data:", error);
     return { error: error.message };
   }
+}
+
+function getProjectName() {
+  const pathSegments = window.location.pathname.split("/").filter(Boolean);
+
+  if (pathSegments.length >= 2) {
+    return decodeURIComponent(pathSegments[1]).trim();
+  }
+
+  return document.querySelector(PROJECT_NAME_SELECTOR)?.textContent?.trim() || "";
 }
 
 function copyAllEnv(envArray) {
@@ -84,40 +104,152 @@ function downloadEnvFile(filename, envArray) {
   window.URL.revokeObjectURL(url);
 }
 
-const projectName = document.querySelector(
-  "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p"
-)?.textContent;
+function getTargetElement() {
+  return document.querySelector(ENVIRONMENT_FIELDSET_SELECTOR);
+}
+
+function clearExistingUI() {
+  document.getElementById(EXPORT_UI_ID)?.remove();
+}
+
+function prepareUI(ui) {
+  ui.id = EXPORT_UI_ID;
+  return ui;
+}
 
 function initializeUI() {
-  const targetElement = document.querySelector(
-    "#environment-variables-fieldset > span:nth-child(5)"
-  );
+  const targetElement = getTargetElement();
 
   if (!targetElement) {
-    console.error("Target element not found!");
     return;
   }
+
+  const projectName = getProjectName();
 
   if (!projectName) {
     console.error("Project name not found!");
-    const errorUI = createUI(false, { error: "Project name not found. Please refresh the page." });
-    targetElement.parentNode.insertBefore(errorUI, targetElement.nextSibling);
+    const errorUI = prepareUI(
+      createUI(false, {
+        error: "Project name not found. Please refresh the page.",
+      })
+    );
+    clearExistingUI();
+    targetElement.appendChild(errorUI);
     return;
   }
 
-  const loadingUI = createUI(true);
-  targetElement.parentNode.insertBefore(loadingUI, targetElement.nextSibling);
+  const loadingUI = prepareUI(createUI(true));
+  clearExistingUI();
+  targetElement.appendChild(loadingUI);
 
-  chrome.runtime.sendMessage({ text: "getAuthorization" }, function (response) {
-    console.log("Response: ", response);
+  chrome.runtime.sendMessage({ type: "getAuthorization" }, function (response) {
+    if (chrome.runtime.lastError) {
+      loadingUI.replaceWith(
+        prepareUI(
+          createUI(false, {
+            error: "Unable to contact the extension background worker. Please refresh the page.",
+          })
+        )
+      );
+      return;
+    }
 
-    fetchEnv(response, projectName).then((result) => {
-      loadingUI.remove();
+    if (response?.error || !response?.authorization) {
+      loadingUI.replaceWith(
+        prepareUI(
+          createUI(false, {
+            error:
+              response?.error ||
+              "Authorization unavailable. Please sign in to Vercel and refresh the page.",
+          })
+        )
+      );
+      return;
+    }
 
-      const resultUI = createUI(false, result);
-      targetElement.parentNode.insertBefore(resultUI, targetElement.nextSibling);
+    fetchEnv(response.authorization, projectName).then((result) => {
+      const resultUI = prepareUI(createUI(false, result));
+      loadingUI.replaceWith(resultUI);
     });
   });
+}
+
+function createSvgIcon(pathDefinition) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("data-testid", "geist-icon");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.style.color = "currentcolor";
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill-rule", "evenodd");
+  path.setAttribute("clip-rule", "evenodd");
+  path.setAttribute("d", pathDefinition);
+  path.setAttribute("fill", "currentColor");
+  svg.appendChild(path);
+
+  return svg;
+}
+
+function createButton(label, iconPath, onClick) {
+  const button = document.createElement("button");
+  button.className = BUTTON_CLASS_NAME;
+  button.setAttribute("data-geist-button", "");
+  button.setAttribute("data-prefix", "true");
+  button.setAttribute("data-suffix", "false");
+  button.setAttribute("data-version", "v1");
+  button.style.setProperty("--geist-icon-size", "16px");
+
+  const prefix = document.createElement("span");
+  prefix.className = "button_prefix__2XlwH";
+  prefix.appendChild(createSvgIcon(iconPath));
+
+  const content = document.createElement("span");
+  content.className = "button_content__1aE1_";
+  content.textContent = label;
+
+  button.appendChild(prefix);
+  button.appendChild(content);
+  button.addEventListener("click", onClick);
+
+  return button;
+}
+
+function createLoadingContent() {
+  const loadingDiv = document.createElement("div");
+  loadingDiv.style.cssText =
+    "display: flex; align-items: center; gap: 8px; color: var(--ds-gray-700);";
+
+  const spinner = createSvgIcon(
+    "M8 1A7 7 0 1 0 15 8"
+  );
+  spinner.setAttribute("fill", "none");
+  spinner.setAttribute("viewBox", "0 0 16 16");
+
+  const path = spinner.querySelector("path");
+  path.removeAttribute("fill-rule");
+  path.removeAttribute("clip-rule");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "2");
+  path.setAttribute("stroke-linecap", "round");
+
+  if (typeof spinner.animate === "function") {
+    spinner.animate(
+      [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+      { duration: 1000, iterations: Infinity }
+    );
+  }
+
+  const text = document.createElement("span");
+  text.textContent = "Loading environment variables...";
+
+  loadingDiv.appendChild(spinner);
+  loadingDiv.appendChild(text);
+
+  return loadingDiv;
 }
 
 initializeUI();
@@ -155,25 +287,7 @@ function createUI(isLoading = true, result = null) {
   stackDiv.style.cssText = "--stack-flex: initial; --stack-direction: column; --stack-align: start; --stack-justify: flex-start; --stack-padding: 0px; --stack-gap: 12px;";
 
   if (isLoading) {
-    const loadingDiv = document.createElement("div");
-    loadingDiv.style.cssText = "display: flex; align-items: center; gap: 8px; color: var(--ds-gray-700);";
-    loadingDiv.innerHTML = `
-      <style>
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .spinner {
-          animation: spin 1s linear infinite;
-          transform-origin: center;
-        }
-      </style>
-      <svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="2" stroke-dasharray="44" stroke-dashoffset="22" stroke-linecap="round"/>
-      </svg>
-      <span>Loading environment variables...</span>
-    `;
-    stackDiv.appendChild(loadingDiv);
+    stackDiv.appendChild(createLoadingContent());
   } else if (result?.error) {
     const errorDiv = document.createElement("div");
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
@@ -183,37 +297,17 @@ function createUI(isLoading = true, result = null) {
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = "display: flex; gap: 8px; justify-content: space-between;";
 
-    // Copy all button
-    const copyButton = document.createElement("button");
-    copyButton.className = "button_base__BjwbK reset_reset__KRyvc button_button__81573 reset_reset__KRyvc button_secondary__kMMNc button_small__iQMBm button_invert__YNhnn";
-    copyButton.setAttribute("data-geist-button", "");
-    copyButton.setAttribute("data-prefix", "true");
-    copyButton.setAttribute("data-suffix", "false");
-    copyButton.setAttribute("data-version", "v1");
-    copyButton.style.setProperty("--geist-icon-size", "16px");
-    copyButton.innerHTML = `<span class="button_prefix__2XlwH">
-                      <svg data-testid="geist-icon" height="16" stroke-linejoin="round" viewBox="0 0 16 16" width="16" style="color: currentcolor;">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.5 13.5V6.5V5.41421C14.5 5.149 14.3946 4.89464 14.2071 4.70711L9.79289 0.292893C9.60536 0.105357 9.351 0 9.08579 0H8H3H1.5V1.5V13.5C1.5 14.8807 2.61929 16 4 16H12C13.3807 16 14.5 14.8807 14.5 13.5ZM13 13.5V6.5H9.5H8V5V1.5H3V13.5C3 14.0523 3.44772 14.5 4 14.5H12C12.5523 14.5 13 14.0523 13 13.5ZM9.5 5V2.12132L12.3787 5H9.5ZM5.13 5.00062H4.505V6.25062H5.13H6H6.625V5.00062H6H5.13ZM4.505 8H5.13H11H11.625V9.25H11H5.13H4.505V8ZM5.13 11H4.505V12.25H5.13H11H11.625V11H11H5.13Z" fill="currentColor"></path>
-                      </svg>
-                    </span>
-                    <span class="button_content__1aE1_">Copy</span>`;
-    copyButton.addEventListener("click", () => copyAllEnv(result.env));
+    const copyButton = createButton(
+      "Copy",
+      "M14.5 13.5V6.5V5.41421C14.5 5.149 14.3946 4.89464 14.2071 4.70711L9.79289 0.292893C9.60536 0.105357 9.351 0 9.08579 0H8H3H1.5V1.5V13.5C1.5 14.8807 2.61929 16 4 16H12C13.3807 16 14.5 14.8807 14.5 13.5ZM13 13.5V6.5H9.5H8V5V1.5H3V13.5C3 14.0523 3.44772 14.5 4 14.5H12C12.5523 14.5 13 14.0523 13 13.5ZM9.5 5V2.12132L12.3787 5H9.5ZM5.13 5.00062H4.505V6.25062H5.13H6H6.625V5.00062H6H5.13ZM4.505 8H5.13H11H11.625V9.25H11H5.13H4.505V8ZM5.13 11H4.505V12.25H5.13H11H11.625V11H11H5.13Z",
+      () => copyAllEnv(result.env)
+    );
 
-    // Download .env button
-    const downloadEnvButton = document.createElement("button");
-    downloadEnvButton.className = copyButton.className;
-    downloadEnvButton.setAttribute("data-geist-button", "");
-    downloadEnvButton.setAttribute("data-prefix", "true");
-    downloadEnvButton.setAttribute("data-suffix", "false");
-    downloadEnvButton.setAttribute("data-version", "v1");
-    downloadEnvButton.style.setProperty("--geist-icon-size", "16px");
-    downloadEnvButton.innerHTML = `<span class="button_prefix__2XlwH">
-                      <svg data-testid="geist-icon" height="16" stroke-linejoin="round" viewBox="0 0 16 16" width="16" style="color: currentcolor;">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M8 12L3 7l1.4-1.4L7 8.2V1h2v7.2l2.6-2.6L13 7l-5 5zm-6 2h12v-2H2v2z" fill="currentColor"></path>
-                      </svg>
-                    </span>
-                    <span class="button_content__1aE1_">.env</span>`;
-    downloadEnvButton.addEventListener("click", () => downloadEnvFile(".env", result.env));
+    const downloadEnvButton = createButton(
+      ".env",
+      "M8 12L3 7l1.4-1.4L7 8.2V1h2v7.2l2.6-2.6L13 7l-5 5zm-6 2h12v-2H2v2z",
+      () => downloadEnvFile(".env", result.env)
+    );
 
     buttonContainer.appendChild(copyButton);
     buttonContainer.appendChild(downloadEnvButton);
