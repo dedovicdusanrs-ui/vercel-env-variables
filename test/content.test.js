@@ -44,7 +44,7 @@ class FakeElement {
     if (index === -1) {
       this.children.push(node);
     } else {
-      this.children.splice(index + 1, 0, node);
+      this.children.splice(index, 0, node);
     }
     return node;
   }
@@ -97,6 +97,7 @@ function createContentHarness(options = {}) {
   const logs = [];
   const fetchCalls = [];
   const clipboardWrites = [];
+  const createdElements = [];
   const alerts = [];
   const objectUrls = [];
   const revokedUrls = [];
@@ -109,7 +110,9 @@ function createContentHarness(options = {}) {
   const document = {
     body,
     createElement(tagName) {
-      return new FakeElement(tagName);
+      const element = new FakeElement(tagName);
+      createdElements.push(element);
+      return element;
     },
     querySelector(selector) {
       if (selector === TARGET_SELECTOR) {
@@ -206,6 +209,7 @@ function createContentHarness(options = {}) {
   return {
     alerts,
     clipboardWrites,
+    createdElements,
     fetchCalls,
     logs,
     objectUrls,
@@ -214,6 +218,10 @@ function createContentHarness(options = {}) {
     targetElement,
     fieldsetParent,
   };
+}
+
+function toPlainValue(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 test("fetchEnv returns decrypted environment variables and reuses the cookie header", async () => {
@@ -247,7 +255,7 @@ test("fetchEnv returns decrypted environment variables and reuses the cookie hea
 
   const result = await harness.sandbox.fetchEnv("auth-cookie", "my-project");
 
-  assert.deepEqual(result, {
+  assert.deepEqual(toPlainValue(result), {
     env: [
       { key: "TOKEN", value: "plain-a" },
       { key: "URL", value: "plain-b" },
@@ -279,7 +287,9 @@ test("fetchEnv returns an error when the project request fails", async () => {
 
   const result = await harness.sandbox.fetchEnv("bad-cookie", "my-project");
 
-  assert.deepEqual(result, { error: "Error: 401 - Unauthorized" });
+  assert.deepEqual(toPlainValue(result), {
+    error: "Error: 401 - Unauthorized",
+  });
   assert.equal(harness.logs.at(-1).type, "error");
 });
 
@@ -305,7 +315,9 @@ test("fetchEnv returns the nested request status when an env lookup fails", asyn
 
   const result = await harness.sandbox.fetchEnv("auth-cookie", "my-project");
 
-  assert.deepEqual(result, { error: "Error: 500 - Server Error" });
+  assert.deepEqual(toPlainValue(result), {
+    error: "Error: 500 - Server Error",
+  });
 });
 
 test("copyAllEnv writes the formatted env content to the clipboard", async () => {
@@ -345,13 +357,12 @@ test("downloadEnvFile creates a downloadable blob and cleans it up", () => {
     { key: "URL", value: "plain-b" },
   ]);
 
-  const link = findElements(
-    harness.fieldsetParent,
-    (element) => element.tagName === "A"
-  )[0];
+  const link = harness.createdElements.find((element) => element.tagName === "A");
 
   assert.equal(harness.objectUrls.length, 1);
-  assert.deepEqual(harness.objectUrls[0].parts, ["TOKEN=plain-a\nURL=plain-b"]);
+  assert.deepEqual(toPlainValue(harness.objectUrls[0].parts), [
+    "TOKEN=plain-a\nURL=plain-b",
+  ]);
   assert.equal(link.download, ".env.local");
   assert.equal(link.clicked, true);
   assert.deepEqual(harness.revokedUrls, ["blob:test"]);
