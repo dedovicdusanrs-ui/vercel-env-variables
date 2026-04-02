@@ -180,6 +180,11 @@ function createUI(result = {}) {
     errorDiv.style.cssText = "color: var(--ds-red-600); padding: 8px;";
     errorDiv.textContent = `Error: ${result.error}`;
     stackDiv.appendChild(errorDiv);
+  } else if (Array.isArray(result.env) && result.env.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText = "color: var(--ds-gray-700); padding: 8px;";
+    emptyDiv.textContent = "No environment variables were found for this project.";
+    stackDiv.appendChild(emptyDiv);
   } else if (Array.isArray(result.env)) {
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = "display: flex; gap: 8px; justify-content: space-between;";

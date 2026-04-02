@@ -68,12 +68,10 @@ async function fetchProjectEnvironmentVariables(projectName) {
   return { env: envVariables };
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "FETCH_ENV_VARIABLES") {
     return false;
   }
-
-  void sender;
 
   fetchProjectEnvironmentVariables(message.projectName)
     .then((result) => sendResponse(result))
