@@ -19,5 +19,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
 
   getAuthorizationCookie(sendResponse);
+  // Keep the message channel open because sendResponse runs in the cookies callback.
   return true;
 });
