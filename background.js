@@ -18,7 +18,15 @@ function getAuthorization(sendResponse) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || !sender.url?.startsWith("https://vercel.com/")) {
+  let senderOrigin = null;
+
+  try {
+    senderOrigin = sender.url ? new URL(sender.url).origin : null;
+  } catch (error) {
+    senderOrigin = null;
+  }
+
+  if (sender.id !== chrome.runtime.id || senderOrigin !== "https://vercel.com") {
     sendResponse({ error: "Unauthorized sender." });
     return false;
   }

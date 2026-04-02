@@ -2,7 +2,7 @@ const EXPORT_CARD_ID = "vercel-env-variables-export-card";
 const TARGET_SELECTOR = "#environment-variables-fieldset > span:nth-child(5)";
 const PROJECT_NAME_SELECTOR =
   "body > div.bg-background-200.min-h-vh.relative > header > nav > ul > li:nth-child(2) > div > a > p";
-const PROJECT_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const PROJECT_NAME_PATTERN = /^[A-Za-z0-9-]+$/;
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -239,7 +239,7 @@ function createLoadingIndicator() {
   spinner.setAttribute("width", "16");
   spinner.setAttribute("height", "16");
   spinner.setAttribute("viewBox", "0 0 16 16");
-  spinner.style.cssText = "animation: vercel-env-spin 1s linear infinite;";
+  spinner.style.cssText = "animation: vercel-extension-env-spin 1s linear infinite;";
 
   const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
   circle.setAttribute("cx", "8");
@@ -254,7 +254,7 @@ function createLoadingIndicator() {
 
   const style = document.createElement("style");
   style.textContent =
-    "@keyframes vercel-env-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
+    "@keyframes vercel-extension-env-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }";
 
   spinner.appendChild(circle);
   loadingDiv.appendChild(style);
