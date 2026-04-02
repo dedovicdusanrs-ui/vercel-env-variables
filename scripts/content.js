@@ -5,7 +5,7 @@ const TARGET_ELEMENT_SELECTOR =
 const EXTENSION_UI_ID = "vercel-env-variables-export-card";
 const STATUS_MESSAGE_DURATION_MS = 2500;
 const NAVIGATION_RENDER_DELAY_MS = 1000;
-let initializeRequestId = 0;
+let latestInitializationId = 0;
 let navigationTimeoutId = null;
 
 function getProjectName() {
@@ -88,7 +88,7 @@ function showStatusMessage(message, isError = false) {
 }
 
 async function initializeUI() {
-  const requestId = ++initializeRequestId;
+  const requestId = ++latestInitializationId;
   const targetElement = document.querySelector(TARGET_ELEMENT_SELECTOR);
 
   if (!targetElement?.parentNode) {
@@ -110,7 +110,7 @@ async function initializeUI() {
 
   const result = await requestEnvironmentVariables(projectName);
 
-  if (requestId !== initializeRequestId) {
+  if (requestId !== latestInitializationId) {
     return;
   }
 

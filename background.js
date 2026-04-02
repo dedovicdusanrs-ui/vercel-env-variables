@@ -1,4 +1,4 @@
-const PROJECT_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
+const VALID_PROJECT_NAME_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 async function getAuthorizationCookie() {
   const cookie = await chrome.cookies.get({
@@ -32,7 +32,7 @@ async function fetchJson(url, authorizationCookie) {
 function normalizeProjectName(projectName) {
   const normalizedProjectName = typeof projectName === "string" ? projectName.trim() : "";
 
-  if (!PROJECT_NAME_PATTERN.test(normalizedProjectName)) {
+  if (!VALID_PROJECT_NAME_PATTERN.test(normalizedProjectName)) {
     throw new Error(
       "Invalid project name. Only letters, numbers, underscores, and hyphens are allowed."
     );
