@@ -1,0 +1,8 @@
+{
+  "name": "vercel-env-variables",
+  "version": "1.0.1",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
