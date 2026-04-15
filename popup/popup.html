@@ -70,6 +70,29 @@
       .github-link:hover img {
         transform: scale(1.1);
       }
+
+      .status-section {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 0.8em 1.2em;
+        margin-bottom: 1em;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: #a0a0a0;
+        flex-shrink: 0;
+      }
+
+      .status-label {
+        font-size: 0.85em;
+        color: #a0a0a0;
+      }
     </style>
   </head>
   <body>
@@ -89,6 +112,10 @@
     </nav>
 
     <div class="container">
+      <div class="status-section">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-label" id="status-label">Checking...</span>
+      </div>
       <div class="info-section">
         <p>
           Vercel doesn't provide a way to export all environment variables at once. This tool helps you to download all environment variables with just one click.
